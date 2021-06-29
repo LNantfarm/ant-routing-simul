@@ -8,8 +8,8 @@ from ant_utils import get_timestamp
 from ant_testing import PheroData, PheroMsg, Node, Payment
 import math
 
-N = 119
-p = 0.017
+N = 42
+p = 0.069
 tmp = nx.fast_gnp_random_graph(N, p)
 SHOW = True
 
