@@ -46,14 +46,15 @@ async def test_payloop(network):
         total_msgs = 0
         total_payments = 0
         for i, stat in enumerate(payments_stats):
+            node = network.nodes[i]
             if stat is not None:
                 (maxi, mini, avg, num) = stat
-                node = network.nodes[i]
                 print(f"Node{i} got {num} payments in average time {avg/10:.2f}s (max={maxi/10:.1f}s, min={mini/10:.1f}s)")
-                print(f"  total_msg={node.total_messages} msg_processed={node.processed_messages}")
-
-                total_msgs += node.total_messages
                 total_payments += num
+
+            print(f"  n{i}: total_msg={node.total_messages} msg_processed={node.processed_messages}")
+
+            total_msgs += node.total_messages
 
         total_time = time.monotonic() - start_time
         print(f"{total_payments} payments using {total_msgs} msgs in {total_time:.2f}s")
@@ -64,7 +65,6 @@ async def test_payloop(network):
             node.total_messages = 0
             node.processed_messages = 0
 
-        
     print("All payments done!")
 
         
@@ -105,7 +105,6 @@ def create_random_payment(network):
         found &= not node_alice.is_busy()
         if count > 10: 
             return (None, None, None)
-
 
     amount = random.randint(1000,10000)
     node_alice = network.nodes[alice]

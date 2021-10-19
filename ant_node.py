@@ -1,6 +1,7 @@
 #ANT ROUTING LIB
-#TODO handle logging and levels
+#TODO BETTER handle logging and levels
 #TODO Drop invoice after timeout 10s ?
+#TODO RETRY if payment failed/timeout
 
 import asyncio 
 import random
@@ -25,24 +26,30 @@ class Node:
         self.node_id = node_id
         self.peers = peers
         self.messages = []
-        self.delay = 0.1 #1*random.random()/2 + 0.1
+        self.delay = 0.1 + 1*random.random()/2 
         self.fee   = random.randint(10,30)
         self.maxfees = random.randint(250,300)
         self.balance = random.randint(50,300)*1000
         self.payment = None
         self.is_running = False
+
+        # Additional logging data
         self.ant_data = AntData()
         self.paid_list = []
         self.total_messages = 0
         self.processed_messages = 0
         self.msgs = []
         self.seedmatches = {}
+        self.created = 0
+
 
     def set_nodes(self, nodes):
         self.nodes = nodes
 
+
     def __repr__(self):
         return f'Node({self.node_id}, {set(self.peers)})'
+
 
     def _process_msg(self, msg):
         #print(f'{self.node_id:02d}: {msg.__class__.__name__} @ {msg}')
@@ -67,8 +74,10 @@ class Node:
 
         process_switch[msg_type](msg)
 
+
     def is_busy(self):
         return self.payment
+
 
     def pay(self, amount, node_to):
         node_bob = self.nodes[node_to]
@@ -110,7 +119,6 @@ class Node:
 
 
     def set_payment(self, payment):
-        #TODO must be private
         self.payment = payment
         bit = "0" if self.payment.alice else "1"
         timestamp = get_timestamp()
@@ -145,7 +153,8 @@ class Node:
         self.messages.append(msg)
 
     def create_and_send_match(self, msg):
-
+        #print(f"{self.node_id} creates match")
+        self.created += 1
         pheromone = msg.pheromone
         seed = pheromone[1:]
         _,seed_data = self.ant_data.get_pheromone(pheromone)
@@ -568,7 +577,7 @@ class Node:
 
                 delta_t = lifespan(self.payment)
                 # Choose match after a bit         
-                if (delta_t >= 5 and not self.payment.match):
+                if (delta_t >= 25 and not self.payment.match):
                     # TODO test all paths ?
                     match = self.choose_match() 
 

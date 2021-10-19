@@ -2,8 +2,20 @@ import networkx as nx
 import random
 import matplotlib.pyplot as plt
 import asyncio
+from math import sqrt
 
 from ant_node import Node
+
+
+ntype = { 'PheroMsg': 0, 'MatchMsg': 2, 'ConfMsg': 3, 'CheckMsg': 4 }
+
+def index_msg(msg):
+    t = msg.__class__.__name__ 
+    result = ntype[t]
+    if result == 0:
+        result = int(msg.pheromone[0])
+    
+    return result
 
 
 class Network:
@@ -30,8 +42,8 @@ class Network:
         self.g = nx.relabel_nodes(self.g, { node:i for i,node in enumerate(self.g.nodes)})
 
 
-      #  self.g = nx.grid_graph(dim=(num_nodes, num_nodes))
-      #  self.g = nx.relabel_nodes(self.g, { node:i for i,node in enumerate(self.g.nodes)})
+        #self.g = nx.grid_graph(dim=(int(sqrt(num_nodes)), int(sqrt(num_nodes))))
+        #self.g = nx.relabel_nodes(self.g, { node:i for i,node in enumerate(self.g.nodes)})
 
         # WARNING num_nodes is not the one passed in args
         self.num_nodes = len(self.g.nodes)
@@ -42,8 +54,21 @@ class Network:
             node.set_nodes(self.nodes)
 
     def show(self):
+        colors = [ "green" for node in self.g.nodes ]
+        colors = []
+        matches = []
+        num_msgs = []
+        for node in self.nodes:
+            matches.append(len(list(filter(lambda m: index_msg(m) == 2, node.msgs))))
+            num_msgs.append(len(node.msgs))
+
+        matchs_created = [ node.created for node in self.nodes ]
+
+        colors=num_msgs
+        print(colors)
+
         nx.draw(self.g, 
-                node_color=[ "green" for node in self.g.nodes ],
+                node_color=colors,
                 with_labels=True)
 
         plt.show()

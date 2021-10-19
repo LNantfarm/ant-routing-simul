@@ -6,31 +6,43 @@ from ant_network import Network
 from ant_utils import lifespan
 
 
-NUM_NODES = 50
+NUM_NODES = 10
 N_PAY_DELAY = 0.005
+
+class ETestDone(Exception):
+    pass
+
+
+ntype = { 'PheroMsg': 0, 'MatchMsg': 2, 'ConfMsg': 3, 'CheckMsg': 4 }
+
+def index_msg(msg):
+    t = msg.__class__.__name__ 
+    result = ntype[t]
+    if result == 0:
+        result = int(msg.pheromone[0])
+    
+    return result
 
 async def test_payloop(network):
     payments = create_all_payments(network)
-    payments = payments[:500]
-    print(payments)
+    payments = [payments[0]]
     
-    print(f"{len(payments)} created!")
     start_time = time.monotonic()
     while len(payments) != 0:
         found = False
         for _ in range(len(payments)):
             (alice, bob) = payments.pop(0)
             node_alice = network.nodes[alice]
-            amount = random.randint(1000,10000)
+            amount = random.randint(1000,9999)
             found = node_alice.pay(amount, bob)
             if not found:
                 payments.append((alice, bob))
             else: 
                 #print(" "*80 + f"# {len(payments)} to go!")
-                await asyncio.sleep(0.001)
+                await asyncio.sleep(0.01)
 
         await asyncio.sleep(N_PAY_DELAY + 0*random.random()/100)
-    print("All payments done!")
+
     await asyncio.sleep(5)
 
     def pay_stats(payment_list):
@@ -47,18 +59,32 @@ async def test_payloop(network):
     payments_stats = map(pay_stats, [node.paid_list for node in network.nodes])
     total_msgs = 0
     total_payments = 0
+    msgs_counts = [0,0,0,0,0] #Phero, Match, Conf, Check
     for i, stat in enumerate(payments_stats):
+        node = network.nodes[i]
         if stat is not None:
             (maxi, mini, avg, num) = stat
-            node = network.nodes[i]
-            print(f"Node{i} got {num} payments in average time {avg/10:.2f}s (max={maxi/10:.1f}s, min={mini/10:.1f}s)")
-            print(f"  total_msg={node.total_messages} msg_processed={node.processed_messages}")
+            #print(f"Node{i} got {num} payments in average time {avg/10:.2f}s (max={maxi/10:.1f}s, min={mini/10:.1f}s)")
+            #print(f"  total_msg={node.total_messages} msg_processed={node.processed_messages}")
 
-            total_msgs += node.total_messages
             total_payments += num
+
+        total_msgs += node.total_messages
+        
+        counts = [0,0,0,0,0]
+        for msg in node.msgs:
+            counts[index_msg(msg)] += 1
+            msgs_counts[index_msg(msg)] += 1
+        node.msg_types = counts
+        print(f"{node.node_id:03d}: p={counts[0] + counts[1]:03d} ({counts[0]:03d}+{counts[1]:03d}) m={counts[2]:03d} cc=[{counts[-2:]}] peers={len(node.peers):02d} matched={node.created:03d}")
+
 
     total_time = time.monotonic() - start_time
     print(f"{total_payments} payments using {total_msgs} msgs in {total_time}s")
+    print(msgs_counts)
+    print(f'{msgs_counts[0] + msgs_counts[1]} msgs, {len(network.g.edges)} edges')    
+
+    network.show()
          
     matches = {}
     for node in network.nodes:
@@ -72,7 +98,8 @@ async def test_payloop(network):
         #print(seed, len(matches[seed]))
         pass
  
-    network.show()
+    raise ETestDone
+
 
 async def test_payloop_(network):
     while True:
@@ -115,44 +142,36 @@ def create_all_payments(network):
     random.shuffle(payments)
     return payments
 
-async def random_test(network):
-    while True:
-        stats = network.stats()
-        
-        payments = [node.payment for node in network.nodes]
-        num_pending = sum(map(lambda x: 1 if x else 0, payments))
-        lifespans = list(map(lambda x: round(lifespan(x)/10,1) if x else 0, payments))
 
-        def print_stat(i):
-            return f"max={stats[i][0]}\tsum={stats[i][1]}"
-        
-        if True:
-            print("#"*50 + '\n' + 
-                f"###   pheromones:   {print_stat(0)}\n" +  
-                f"###   matches:      {print_stat(1)}\n" +
-                f"###   confirmation: {print_stat(2)}\n" + 
-                f"###   spec.matches: {print_stat(3)}\n" + 
-                f"###   pending: {num_pending}/{network.num_nodes}\n" +  
-                    "#"*50 )
-            print(sorted(set(lifespans), reverse=True)) 
-        
-        await asyncio.sleep(10)
+async def test():
+    for num_nodes in range(10,101, 10):
+        num_nodes = 37
+        network = Network(num_nodes, 8/num_nodes)
+        #print(f"{len(network.g.edges)} edges, {len(network.g.nodes)} nodes")
+        #network.show()
+
+        tasks = network.create_tasks()
+        tasks.extend([test_payloop(network)]) #, random_test(network)])
+
+        tasks = [ task if isinstance(task, asyncio.Task) else asyncio.create_task(task) for task in tasks ]
+    
+        network.tasks = tasks
+
+        try:
+            await asyncio.gather(*tasks)
+        except ETestDone:
+            for task in tasks:
+                task.cancel()
 
 
-async def test(network):
-    tasks = network.create_tasks()
-#    tasks.append(asyncio.create_task(test_payloop(network)))
-#    tasks.append(asyncio.create_task(random_test(network)))
-    tasks.extend([test_payloop(network), random_test(network)])
-
-    await asyncio.gather(*tasks)
     print("Test done")
+    await asyncio.sleep(10)
 
 if __name__ == "__main__":
-    network = Network(NUM_NODES, 8/NUM_NODES)
+    #network = Network(NUM_NODES, 8/NUM_NODES)
     #network.show()
     try:
-        asyncio.run(test(network))
+        asyncio.run(test())
     except KeyboardInterrupt:
         print("bye!")
         exit(42)
